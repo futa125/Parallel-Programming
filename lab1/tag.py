@@ -2,7 +2,7 @@ from enum import IntEnum, auto
 
 
 class Tag(IntEnum):
-    REQUEST_LEFT = auto()
-    REQUEST_RIGHT = auto()
-    SEND_LEFT = auto()
-    SEND_RIGHT = auto()
+    REQUEST_LEFT_FORK = auto()
+    REQUEST_RIGHT_FORK = auto()
+    SEND_LEFT_FORK = auto()
+    SEND_RIGHT_FORK = auto()

@@ -7,7 +7,7 @@ from philosopher import Philosopher, Side
 
 def main() -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='[%(process)d][%(levelname)s][%(asctime)s] %(message)s',
         datefmt='%d-%b-%y %H:%M:%S',
     )
@@ -25,17 +25,17 @@ def main() -> None:
             philosopher.send_fork_request(Side.LEFT)
 
             while philosopher.left_fork is None:
-                philosopher.process_incoming_responses()
-                philosopher.process_incoming_requests()
+                philosopher.process_fork_responses()
+                philosopher.process_fork_requests()
 
             philosopher.send_fork_request(Side.RIGHT)
 
             while philosopher.right_fork is None:
-                philosopher.process_incoming_responses()
-                philosopher.process_incoming_requests()
+                philosopher.process_fork_responses()
+                philosopher.process_fork_requests()
 
         philosopher.eat()
-        philosopher.process_backlog_requests()
+        philosopher.process_backlog_fork_requests()
 
 
 if __name__ == "__main__":

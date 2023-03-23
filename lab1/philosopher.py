@@ -1,11 +1,12 @@
 import logging
 import random
 import time
-
 from dataclasses import dataclass, field
 from enum import auto, Enum
 from typing import Optional
+
 from mpi4py import MPI
+
 from fork import Fork, ForkState
 from tag import Tag
 
@@ -20,8 +21,8 @@ class Side(Enum):
 
 @dataclass
 class Requests:
-    request_left: bool = False
-    request_right: bool = False
+    request_left_fork: bool = False
+    request_right_fork: bool = False
 
 
 @dataclass
@@ -54,111 +55,111 @@ class Philosopher:
         else:
             self.left_fork, self.right_fork = None, Fork()
 
-        logging.info(f"{self._get_indent()}Process started")
+        logging.debug(f"{self._get_indent()}Process started")
 
     def think(self) -> None:
         sleep_duration = random.randint(MIN_SLEEP_DURATION, MAX_SLEEP_DURATION)
+        logging.debug(f"{self._get_indent()}Thinking for {sleep_duration} seconds")
 
-        logging.info(f"{self._get_indent()}Thinking for {sleep_duration} seconds")
         for _ in range(sleep_duration):
             time.sleep(1)
-            self.process_incoming_requests()
+            self.process_fork_requests()
 
-    def process_incoming_requests(self) -> None:
-        self._process_incoming_request_left()
-        self._process_incoming_request_right()
+    def process_fork_requests(self) -> None:
+        self._process_left_fork_request()
+        self._process_right_fork_request()
 
     def send_fork_request(self, side: Side) -> None:
         if side == Side.LEFT:
-            self._send_fork_request_left()
+            self._send_left_fork_request()
         elif side == Side.RIGHT:
-            self._send_fork_request_right()
+            self._send_right_fork_request()
 
-    def process_incoming_responses(self):
-        self._process_incoming_response_left()
-        self._process_incoming_response_right()
+    def process_fork_responses(self) -> None:
+        self._process_left_fork_response()
+        self._process_right_fork_response()
 
-    def eat(self):
-        logging.info(f"{self._get_indent()}Eating")
+    def eat(self) -> None:
+        logging.debug(f"{self._get_indent()}Eating")
         self.left_fork.state = ForkState.DIRTY
         self.right_fork.state = ForkState.DIRTY
 
-    def process_backlog_requests(self):
-        if self.backlog_requests.request_left:
+    def process_backlog_fork_requests(self) -> None:
+        if self.backlog_requests.request_left_fork:
             self._send_right_fork()
-            self.backlog_requests.request_left = False
+            self.backlog_requests.request_left_fork = False
 
-        if self.backlog_requests.request_right:
+        if self.backlog_requests.request_right_fork:
             self._send_left_fork()
-            self.backlog_requests.request_right = False
+            self.backlog_requests.request_right_fork = False
 
-    def _process_incoming_request_left(self) -> None:
-        if self.comm.Iprobe(source=self.right_neighbor_rank, tag=Tag.REQUEST_LEFT):
-            self.comm.recv(source=self.right_neighbor_rank, tag=Tag.REQUEST_LEFT)
-            logging.info(f"{self._get_indent()}Received a request for my right fork")
+    def _process_left_fork_request(self) -> None:
+        if self.comm.Iprobe(source=self.right_neighbor_rank, tag=Tag.REQUEST_LEFT_FORK):
+            self.comm.recv(source=self.right_neighbor_rank, tag=Tag.REQUEST_LEFT_FORK)
+            logging.debug(f"{self._get_indent()}Received a request for my right fork")
 
             if self.right_fork is not None and self.right_fork.state == ForkState.DIRTY:
                 self._send_right_fork()
             else:
-                self.backlog_requests.request_left = True
+                self.backlog_requests.request_left_fork = True
 
-    def _process_incoming_request_right(self):
-        if self.comm.Iprobe(source=self.left_neighbor_rank, tag=Tag.REQUEST_RIGHT):
-            self.comm.recv(source=self.left_neighbor_rank, tag=Tag.REQUEST_RIGHT)
-            logging.info(f"{self._get_indent()}Received a request for my left fork")
+    def _process_right_fork_request(self) -> None:
+        if self.comm.Iprobe(source=self.left_neighbor_rank, tag=Tag.REQUEST_RIGHT_FORK):
+            self.comm.recv(source=self.left_neighbor_rank, tag=Tag.REQUEST_RIGHT_FORK)
+            logging.debug(f"{self._get_indent()}Received a request for my left fork")
 
             if self.left_fork is not None and self.left_fork.state == ForkState.DIRTY:
                 self._send_left_fork()
             else:
-                self.backlog_requests.request_right = True
+                self.backlog_requests.request_right_fork = True
 
-    def _send_left_fork(self):
+    def _send_left_fork(self) -> None:
         self.left_fork.state = ForkState.CLEAN
-        self.comm.isend(self.left_fork, dest=self.left_neighbor_rank, tag=Tag.SEND_LEFT)
-        logging.info(f"{self._get_indent()}Sent my left fork")
+        self.comm.isend(self.left_fork, dest=self.left_neighbor_rank, tag=Tag.SEND_LEFT_FORK)
+        logging.debug(f"{self._get_indent()}Sent my left fork")
 
         self.left_fork = None
 
-    def _send_right_fork(self):
+    def _send_right_fork(self) -> None:
         self.right_fork.state = ForkState.CLEAN
-        self.comm.isend(self.right_fork, dest=self.right_neighbor_rank, tag=Tag.SEND_RIGHT)
-        logging.info(f"{self._get_indent()}Sent my right fork")
+        self.comm.isend(self.right_fork, dest=self.right_neighbor_rank, tag=Tag.SEND_RIGHT_FORK)
+        logging.debug(f"{self._get_indent()}Sent my right fork")
 
         self.right_fork = None
 
-    def _send_fork_request_left(self):
+    def _send_left_fork_request(self) -> None:
         if self.left_fork is not None:
             return
 
-        if self.sent_requests.request_left:
+        if self.sent_requests.request_left_fork:
             return
 
-        self.comm.isend(None, dest=self.left_neighbor_rank, tag=Tag.REQUEST_LEFT)
-        logging.info(f"{self._get_indent()}Sent a request for my left fork")
-        self.sent_requests.request_left = True
+        self.comm.isend(None, dest=self.left_neighbor_rank, tag=Tag.REQUEST_LEFT_FORK)
+        logging.debug(f"{self._get_indent()}Sent a request for my left fork")
+        self.sent_requests.request_left_fork = True
 
-    def _send_fork_request_right(self):
+    def _send_right_fork_request(self) -> None:
         if self.right_fork is not None:
             return
 
-        if self.sent_requests.request_right:
+        if self.sent_requests.request_right_fork:
             return
 
-        self.comm.isend(None, dest=self.right_neighbor_rank, tag=Tag.REQUEST_RIGHT)
-        logging.info(f"{self._get_indent()}Sent a request for my right fork")
-        self.sent_requests.request_right = True
+        self.comm.isend(None, dest=self.right_neighbor_rank, tag=Tag.REQUEST_RIGHT_FORK)
+        logging.debug(f"{self._get_indent()}Sent a request for my right fork")
+        self.sent_requests.request_right_fork = True
 
-    def _process_incoming_response_left(self):
-        if self.comm.Iprobe(source=self.right_neighbor_rank, tag=Tag.SEND_LEFT):
-            self.right_fork = self.comm.recv(source=self.right_neighbor_rank, tag=Tag.SEND_LEFT)
-            logging.info(f"{self._get_indent()}Received my right fork")
-            self.sent_requests.request_right = False
+    def _process_left_fork_response(self) -> None:
+        if self.comm.Iprobe(source=self.right_neighbor_rank, tag=Tag.SEND_LEFT_FORK):
+            self.right_fork = self.comm.recv(source=self.right_neighbor_rank, tag=Tag.SEND_LEFT_FORK)
+            logging.debug(f"{self._get_indent()}Received my right fork")
+            self.sent_requests.request_right_fork = False
 
-    def _process_incoming_response_right(self):
-        if self.comm.Iprobe(source=self.left_neighbor_rank, tag=Tag.SEND_RIGHT):
-            self.left_fork = self.comm.recv(source=self.left_neighbor_rank, tag=Tag.SEND_RIGHT)
-            logging.info(f"{self._get_indent()}Received my left fork")
-            self.sent_requests.request_left = False
+    def _process_right_fork_response(self) -> None:
+        if self.comm.Iprobe(source=self.left_neighbor_rank, tag=Tag.SEND_RIGHT_FORK):
+            self.left_fork = self.comm.recv(source=self.left_neighbor_rank, tag=Tag.SEND_RIGHT_FORK)
+            logging.debug(f"{self._get_indent()}Received my left fork")
+            self.sent_requests.request_left_fork = False
 
     def _get_indent(self) -> str:
         return "    " * self.rank
