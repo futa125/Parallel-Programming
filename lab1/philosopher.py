@@ -1,16 +1,21 @@
 import logging
 import random
 import time
+
 from dataclasses import dataclass, field
+from enum import auto, Enum
 from typing import Optional
-
 from mpi4py import MPI
-
 from fork import Fork, ForkState
 from tag import Tag
 
 MIN_SLEEP_DURATION = 1
 MAX_SLEEP_DURATION = 5
+
+
+class Side(Enum):
+    LEFT = auto()
+    RIGHT = auto()
 
 
 @dataclass
@@ -63,9 +68,11 @@ class Philosopher:
         self._process_incoming_request_left()
         self._process_incoming_request_right()
 
-    def send_fork_requests(self) -> None:
-        self._send_fork_request_left()
-        self._send_fork_request_right()
+    def send_fork_request(self, side: Side) -> None:
+        if side == Side.LEFT:
+            self._send_fork_request_left()
+        elif side == Side.RIGHT:
+            self._send_fork_request_right()
 
     def process_incoming_responses(self):
         self._process_incoming_response_left()

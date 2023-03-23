@@ -33,4 +33,4 @@ then
     exit 1
 fi
 
-mpirun -n "$process_count" python main.py
+mpirun -np "$process_count" python main.py
