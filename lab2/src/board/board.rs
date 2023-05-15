@@ -1,17 +1,28 @@
-use std::{fmt, result, cmp};
+use std::{cmp, fmt, result};
+use serde::{Serialize, Deserialize};
 
 const DEFAULT_ROWS: usize = 6;
 const DEFAULT_COLUMNS: usize = 7;
 const CONNECT_COUNT: usize = 4;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TokenColor {
     Red,
     Yellow,
 }
 
-#[derive(Clone, PartialEq, Eq)]
-enum Field {
+impl TokenColor {
+    pub fn invert(self: &Self) -> TokenColor {
+        if *self == Self::Red {
+            return Self::Yellow;
+        }
+
+        return Self::Red;
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum Field {
     Empty,
     Marker(TokenColor),
 }
@@ -19,7 +30,7 @@ enum Field {
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         match self {
-            Field::Empty => f.write_str("⚪"),
+            Field::Empty => write!(f, "⚪"),
             Field::Marker(color) => match color {
                 TokenColor::Red => write!(f, "🔴"),
                 TokenColor::Yellow => write!(f, "🟡"),
@@ -28,7 +39,7 @@ impl fmt::Display for Field {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum GameStatus {
     InProgress,
     Finished(TokenColor),
@@ -45,25 +56,16 @@ impl fmt::Display for MoveError {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Board {
-    rows: usize,
-    columns: usize,
-    fields: Vec<Vec<Field>>,
+    pub rows: usize,
+    pub columns: usize,
+    pub fields: Vec<Vec<Field>>,
     columns_full: Vec<bool>,
     status: GameStatus,
 }
 
 impl Board {
-    pub fn new(rows: usize, columns: usize) -> Self {
-        return Self {
-            rows,
-            columns,
-            fields: vec![vec![Field::Empty; columns]; rows],
-            columns_full: vec![false; columns],
-            status: GameStatus::InProgress,
-        };
-    }
-
     pub fn show(self: &Self) {
         self.fields.iter().for_each(|row: &Vec<Field>| {
             row.iter().for_each(|field: &Field| print!("{} ", field));

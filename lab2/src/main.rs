@@ -1,52 +1,33 @@
+extern crate mpi;
+
 mod board;
+mod node;
+mod process;
+
+use board::board::GameStatus;
+use process::worker::Worker;
 use std::io;
 
+use crate::board::board::{Board, TokenColor};
+use crate::node::node::Node;
+use crate::process::master::Master;
+use mpi::traits::*;
+
 fn main() {
-    let stdin = io::stdin();
-    let mut buf = String::new();
-    let mut column: usize;
-    let mut color: board::TokenColor = board::TokenColor::Yellow;
+    let universe = mpi::initialize().unwrap();
+    let world = universe.world();
+    let size: i32 = world.size();
+    let rank: i32 = world.rank();
+    let master_rank: i32 = 0;
 
-    let mut board = board::Board::default();
+    let board = Board::default();
 
-    loop {
-        match stdin.read_line(&mut buf) {
-            Err(err) => println!("{err}"),
-            _ => (),
-        }
+    let mut master = Master::new(world, board);
+    let worker: Worker = Worker::new(world, master_rank);
 
-        match buf.trim().parse::<usize>() {
-            Err(err) => {
-                println!("{err}");
-                buf.clear();
-                continue;
-            }
-            Ok(v) => column = v,
-        }
-
-        match board.make_move(column, color) {
-            Ok(status) => match status {
-                board::GameStatus::Finished(winner) => {
-                    println!("Winner is: {:?}", winner);
-                    board.show();
-                    break;
-                }
-                _ => (),
-            },
-            Err(err) => {
-                println!("{err}");
-                buf.clear();
-                continue;
-            }
-        }
-
-        board.show();
-        buf.clear();
-
-        if color == board::TokenColor::Yellow {
-            color = board::TokenColor::Red
-        } else {
-            color = board::TokenColor::Yellow
-        }
+    if rank == master_rank {
+        master.run();
+    } else {
+        worker.run();
     }
 }
