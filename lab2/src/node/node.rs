@@ -1,7 +1,6 @@
-extern crate serde;
-
-use crate::board::board::{Board, GameStatus, TokenColor};
-use serde::{Serialize, Deserialize};
+use crate::board::board::{Board, GameStatus};
+use crate::board::token::TokenColor;
+use serde::{Deserialize, Serialize};
 
 const WIN_VALUE: f64 = 1.0;
 const LOSE_VALUE: f64 = -1.0;
@@ -9,21 +8,19 @@ const NEUTRAL_VALUE: f64 = 0.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
-    pub board: Board,
-    pub status: GameStatus,
-    pub color: TokenColor,
+    color: TokenColor,
     pub column: usize,
     pub value: Option<f64>,
     pub children: Vec<Node>,
+    status: GameStatus,
 }
 
 impl Node {
-    pub fn new(board: Board, status: GameStatus, color: TokenColor, column: usize) -> Node {
+    pub fn new(color: TokenColor, column: usize, status: GameStatus) -> Node {
         return Self {
-            board,
-            status,
             color,
             column,
+            status,
             value: None,
             children: vec![],
         };
@@ -33,27 +30,49 @@ impl Node {
         self.children.push(node)
     }
 
-    pub fn build_tree(self: &mut Self, max_depth: usize, curr_depth: usize) {
+    pub fn build_tree(self: &mut Self, board: &mut Board, max_depth: usize, curr_depth: usize) {
         if curr_depth > max_depth {
             return;
         }
 
-        for i in 0..self.board.columns {
-            let mut board_clone = self.board.clone();
-
-            let Ok(game_status) = board_clone.make_move(i, self.color.invert()) else {
+        for i in 0..board.columns {
+            if !board.is_move_legal(i) {
                 continue;
-            };
+            }
 
-            let mut child = Node::new(board_clone, game_status, self.color.invert(), i);
+            board.make_move(i, self.color.invert()).unwrap();
+            match board.get_status() {
+                GameStatus::Finished(status) => {
+                    board.undo_move(i).unwrap();
 
-            child.build_tree(max_depth, curr_depth + 1);
+                    self.add_child(Node::new(
+                        self.color.invert(),
+                        i,
+                        GameStatus::Finished(status),
+                    ));
 
-            self.add_child(child);
+                    continue;
+                }
+
+                GameStatus::InProgress => {
+                    let mut child = Node::new(self.color.invert(), i, GameStatus::InProgress);
+
+                    child.build_tree(board, max_depth, curr_depth + 1);
+
+                    board.undo_move(i).unwrap();
+
+                    self.add_child(child);
+                }
+            }
         }
     }
 
-    pub fn calculate_value(self: &mut Self, cpu_color: TokenColor, player_color: TokenColor) {
+    pub fn calculate_value(
+        self: &mut Self,
+        board: &mut Board,
+        cpu_color: TokenColor,
+        player_color: TokenColor,
+    ) {
         if self.children.len() == 0 {
             match self.status {
                 GameStatus::Finished(color) => {
@@ -71,7 +90,9 @@ impl Node {
 
         for child in self.children.as_mut_slice() {
             if child.value.is_none() {
-                child.calculate_value(cpu_color, player_color);
+                board.make_move(child.column, child.color).unwrap();
+                child.calculate_value(board, cpu_color, player_color);
+                board.undo_move(child.column).unwrap();
             }
         }
 

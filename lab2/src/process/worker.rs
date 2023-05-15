@@ -1,19 +1,6 @@
-extern crate bincode;
-extern crate mpi;
-extern crate serde_json;
-
-use crate::{
-    board::board::{Board, GameStatus, TokenColor},
-    node::node::Node,
-    process::tag::Tag,
-};
-use mpi::{topology::*, traits::*};
-use std::{
-    io::{self, Write},
-    thread::sleep,
-    time::Duration,
-};
 use super::task::Task;
+use crate::{board::token::TokenColor, process::tag::Tag};
+use mpi::{topology::*, traits::*};
 
 pub struct Worker {
     world: SystemCommunicator,
@@ -36,25 +23,29 @@ impl Worker {
         loop {
             self.world
                 .process_at_rank(self.master_rank)
-                .send_with_tag(&0, Tag::RequestWork as i32);
+                .send_with_tag::<u8>(&0, Tag::RequestWork as i32);
 
-            let (assignment, _) = self
+            let (assignment, status) = self
                 .world
                 .process_at_rank(self.master_rank)
-                .receive_vec_with_tag::<u8>(Tag::Assignment as i32);
+                .receive_vec::<u8>();
 
+            if status.tag() == Tag::Finished as i32 {
+                break;
+            } else if status.tag() == Tag::Assignment as i32 {
+                let mut task: Task = bincode::deserialize(&assignment).unwrap();
 
-            let mut task: Task = bincode::deserialize(&assignment).unwrap();
+                task.node.build_tree(&mut task.board, 6, 2);
 
-            task.node.build_tree(6, 2);
-            
-            task.node.calculate_value(self.cpu_color, self.player_color);
+                task.node
+                    .calculate_value(&mut task.board, self.cpu_color, self.player_color);
 
-            let task_encoded: Vec<u8> = bincode::serialize(&task).unwrap();
+                let task_encoded: Vec<u8> = bincode::serialize(&task).unwrap();
 
-            self.world
-                .process_at_rank(self.master_rank)
-                .send_with_tag(&task_encoded, Tag::Result as i32);
+                self.world
+                    .process_at_rank(self.master_rank)
+                    .send_with_tag(&task_encoded, Tag::Result as i32);
+            }
         }
     }
 }

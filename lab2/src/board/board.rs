@@ -1,37 +1,21 @@
-use std::{cmp, fmt, result};
-use serde::{Serialize, Deserialize};
+use super::token::TokenColor;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 const DEFAULT_ROWS: usize = 6;
 const DEFAULT_COLUMNS: usize = 7;
-const CONNECT_COUNT: usize = 4;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub enum TokenColor {
-    Red,
-    Yellow,
-}
-
-impl TokenColor {
-    pub fn invert(self: &Self) -> TokenColor {
-        if *self == Self::Red {
-            return Self::Yellow;
-        }
-
-        return Self::Red;
-    }
-}
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub enum Field {
+enum Field {
     Empty,
-    Marker(TokenColor),
+    Token(TokenColor),
 }
 
 impl fmt::Display for Field {
-    fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Field::Empty => write!(f, "⚪"),
-            Field::Marker(color) => match color {
+            Field::Token(color) => match color {
                 TokenColor::Red => write!(f, "🔴"),
                 TokenColor::Yellow => write!(f, "🟡"),
             },
@@ -51,7 +35,7 @@ pub struct MoveError {
 }
 
 impl fmt::Display for MoveError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.message)
     }
 }
@@ -60,9 +44,8 @@ impl fmt::Display for MoveError {
 pub struct Board {
     pub rows: usize,
     pub columns: usize,
-    pub fields: Vec<Vec<Field>>,
+    fields: Vec<Vec<Field>>,
     columns_full: Vec<bool>,
-    status: GameStatus,
 }
 
 impl Board {
@@ -74,30 +57,17 @@ impl Board {
         println!()
     }
 
-    pub fn make_move(
-        self: &mut Self,
-        column: usize,
-        color: TokenColor,
-    ) -> Result<GameStatus, MoveError> {
+    pub fn make_move(self: &mut Self, column: usize, color: TokenColor) -> Result<(), MoveError> {
         if !self.is_move_legal(column) {
             return Err(MoveError {
                 message: "illegal move".to_string(),
             });
         }
 
-        match self.status {
-            GameStatus::Finished(_) => {
-                return Err(MoveError {
-                    message: "game finished, can't make additional moves".to_string(),
-                })
-            }
-            _ => (),
-        }
-
         for row in (0..self.rows).rev() {
             match self.fields[row][column] {
                 Field::Empty => {
-                    self.fields[row][column] = Field::Marker(color);
+                    self.fields[row][column] = Field::Token(color);
                     if row == 0 {
                         self.columns_full[column] = true;
                     }
@@ -105,21 +75,48 @@ impl Board {
                     break;
                 }
 
-                Field::Marker(_) => continue,
+                Field::Token(_) => continue,
             }
         }
 
-        if self.is_move_winning(color) {
-            let status = GameStatus::Finished(color);
-            self.status = status;
-
-            return Ok(status);
-        }
-
-        return Ok(GameStatus::InProgress);
+        return Ok(());
     }
 
-    fn is_move_legal(self: &Self, column: usize) -> bool {
+    pub fn undo_move(self: &mut Self, column: usize) -> Result<(), MoveError> {
+        if column >= self.columns {
+            return Err(MoveError {
+                message: "column index out of range".to_string(),
+            });
+        }
+
+        if self.fields[self.rows - 1][column] == Field::Empty {
+            return Err(MoveError {
+                message: "column is empty".to_string(),
+            });
+        }
+
+        for i in 0..self.rows {
+            if self.fields[i][column] != Field::Empty {
+                self.fields[i][column] = Field::Empty;
+                break;
+            }
+        }
+
+        if self.fields[0][column] == Field::Empty {
+            self.columns_full[column] = false;
+        }
+
+        return Ok(());
+    }
+
+    pub fn get_status(self: &Self) -> GameStatus {
+        return match self.get_winner() {
+            Some(color) => GameStatus::Finished(color),
+            None => GameStatus::InProgress,
+        };
+    }
+
+    pub fn is_move_legal(self: &Self, column: usize) -> bool {
         if column >= self.columns {
             return false;
         }
@@ -131,112 +128,60 @@ impl Board {
         return true;
     }
 
-    fn is_move_winning(self: &Self, color: TokenColor) -> bool {
-        if self.is_move_winning_rows(color) {
-            return true;
-        }
-
-        if self.is_move_winning_columns(color) {
-            return true;
-        }
-
-        if self.is_move_winning_diagonals(color) {
-            return true;
-        }
-
-        return false;
-    }
-
-    fn is_move_winning_rows(self: &Self, color: TokenColor) -> bool {
-        let mut counter: usize = 0;
-
+    fn get_winner(self: &Self) -> Option<TokenColor> {
         for row in 0..self.rows {
             for column in 0..self.columns {
-                if self.markers_connected(row, column, color, &mut counter) {
-                    return true;
-                };
-            }
+                if self.fields[row][column] == Field::Empty {
+                    continue;
+                }
 
-            counter = 0;
+                if (row > 4 && column > 4)
+                    && (self.fields[row][column] == self.fields[row - 1][column - 1])
+                    && (self.fields[row - 1][column - 1] == self.fields[row - 2][column - 2])
+                    && (self.fields[row - 2][column - 2] == self.fields[row - 3][column - 3])
+                {
+                    return match self.fields[row][column] {
+                        Field::Token(color) => Some(color),
+                        Field::Empty => None,
+                    };
+                }
+
+                if (row < self.rows - 3)
+                    && (self.fields[row][column] == self.fields[row + 1][column])
+                    && (self.fields[row + 1][column] == self.fields[row + 2][column])
+                    && (self.fields[row + 2][column] == self.fields[row + 3][column])
+                {
+                    return match self.fields[row][column] {
+                        Field::Token(color) => Some(color),
+                        Field::Empty => None,
+                    };
+                }
+
+                if (row > self.rows - 3 && column < self.columns - 3)
+                    && (self.fields[row][column] == self.fields[row - 1][column + 1])
+                    && (self.fields[row - 1][column + 1] == self.fields[row - 2][column + 2])
+                    && (self.fields[row - 2][column + 2] == self.fields[row - 3][column + 3])
+                {
+                    return match self.fields[row][column] {
+                        Field::Token(color) => Some(color),
+                        Field::Empty => None,
+                    };
+                }
+
+                if (column < self.columns - 3)
+                    && (self.fields[row][column] == self.fields[row][column + 1])
+                    && (self.fields[row][column + 1] == self.fields[row][column + 2])
+                    && (self.fields[row][column + 2] == self.fields[row][column + 3])
+                {
+                    return match self.fields[row][column] {
+                        Field::Token(color) => Some(color),
+                        Field::Empty => None,
+                    };
+                }
+            }
         }
 
-        return false;
-    }
-
-    fn is_move_winning_columns(self: &Self, color: TokenColor) -> bool {
-        let mut counter: usize = 0;
-
-        for column in 0..self.columns {
-            for row in 0..self.rows {
-                if self.markers_connected(row, column, color, &mut counter) {
-                    return true;
-                };
-            }
-
-            counter = 0;
-        }
-
-        return false;
-    }
-
-    fn is_move_winning_diagonals(self: &Self, color: TokenColor) -> bool {
-        let mut start_column: usize;
-        let mut diagonal_size: usize;
-        let mut counter_left: usize = 0;
-        let mut counter_right: usize = 0;
-
-        let mut row: usize;
-        let mut column_left: usize;
-        let mut column_right: usize;
-
-        for diagonal in 1..self.rows + self.columns {
-            if self.rows > diagonal {
-                start_column = 0;
-            } else {
-                start_column = cmp::max(0, diagonal - self.rows);
-            }
-
-            diagonal_size = cmp::min(diagonal, self.columns - start_column);
-            diagonal_size = cmp::min(diagonal_size, self.rows);
-
-            for i in 0..diagonal_size {
-                row = cmp::min(self.rows, diagonal) - i - 1;
-                column_left = self.columns - (start_column + i) - 1;
-                column_right = start_column + i;
-
-                if self.markers_connected(row, column_left, color, &mut counter_left) {
-                    return true;
-                };
-
-                if self.markers_connected(row, column_right, color, &mut counter_right) {
-                    return true;
-                };
-            }
-
-            counter_left = 0;
-            counter_right = 0;
-        }
-
-        return false;
-    }
-
-    fn markers_connected(
-        self: &Self,
-        row: usize,
-        column: usize,
-        color: TokenColor,
-        counter: &mut usize,
-    ) -> bool {
-        if self.fields[row][column] == Field::Marker(color) {
-            *counter += 1;
-            if *counter == CONNECT_COUNT {
-                return true;
-            }
-        } else {
-            *counter = 0;
-        }
-
-        return false;
+        return None;
     }
 }
 
@@ -247,7 +192,6 @@ impl Default for Board {
             columns: DEFAULT_COLUMNS,
             fields: vec![vec![Field::Empty; DEFAULT_COLUMNS]; DEFAULT_ROWS],
             columns_full: vec![false; DEFAULT_COLUMNS],
-            status: GameStatus::InProgress,
         };
     }
 }
