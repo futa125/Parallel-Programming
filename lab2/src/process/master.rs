@@ -7,8 +7,6 @@ use crate::{
 use mpi::{topology::*, traits::*};
 use std::{
     io::{self, Write},
-    thread::sleep,
-    time::Duration,
     time::Instant,
 };
 
@@ -80,7 +78,6 @@ impl Master {
             let start = Instant::now();
             loop {
                 let (msg, status) = self.world.any_process().receive_vec::<u8>();
-                println!("{}", status.source_rank());
 
                 if status.tag() == Tag::RequestWork as i32 {
                     let Some(task) = tasks.pop() else {
