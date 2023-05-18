@@ -88,7 +88,7 @@ impl Node {
             return;
         }
 
-        for child in self.children.as_mut_slice() {
+        for child in self.children.iter_mut() {
             if child.value.is_none() {
                 board.make_move(child.column, child.color).unwrap();
                 child.calculate_value(board, cpu_color, player_color);
@@ -99,33 +99,22 @@ impl Node {
         if self
             .children
             .iter()
-            .any(|x| x.value.unwrap_or(0.0) == WIN_VALUE && x.color == cpu_color)
+            .any(|x| x.value.unwrap() == WIN_VALUE && x.color == cpu_color)
         {
             self.value = Some(WIN_VALUE);
         } else if self
             .children
             .iter()
-            .any(|x| x.value.unwrap_or(0.0) == LOSE_VALUE && x.color == player_color)
+            .any(|x| x.value.unwrap() == LOSE_VALUE && x.color == player_color)
         {
             self.value = Some(LOSE_VALUE);
-        } else if self
-            .children
-            .iter()
-            .all(|x| x.value.unwrap_or(0.0) == WIN_VALUE)
-        {
+        } else if self.children.iter().all(|x| x.value.unwrap() == WIN_VALUE) {
             self.value = Some(WIN_VALUE);
-        } else if self
-            .children
-            .iter()
-            .all(|x| x.value.unwrap_or(0.0) == LOSE_VALUE)
-        {
+        } else if self.children.iter().all(|x| x.value.unwrap() == LOSE_VALUE) {
             self.value = Some(LOSE_VALUE);
         } else {
             self.value = Some(
-                self.children
-                    .iter()
-                    .map(|x| x.value.unwrap_or(0.0))
-                    .sum::<f64>()
+                self.children.iter().map(|x| x.value.unwrap()).sum::<f64>()
                     / (self.children.len() as f64),
             )
         }

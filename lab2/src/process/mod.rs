@@ -1,4 +1,4 @@
+pub mod assignment;
 pub mod master;
-pub mod worker;
 pub mod tag;
-pub mod task;
+pub mod worker;

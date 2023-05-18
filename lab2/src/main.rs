@@ -1,5 +1,3 @@
-extern crate core_affinity;
-
 mod board;
 mod node;
 mod process;
@@ -18,7 +16,7 @@ fn main() {
     let board = Board::default();
 
     let mut master = Master::new(world, board);
-    let worker: Worker = Worker::new(world, master_rank);
+    let worker: Worker = Worker::new(world, master_rank, 4);
 
     if rank == master_rank {
         master.run();

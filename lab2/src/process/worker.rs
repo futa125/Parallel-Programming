@@ -1,4 +1,4 @@
-use super::task::Task;
+use super::assignment::Assignment;
 use crate::{board::token::TokenColor, process::tag::Tag};
 use mpi::{topology::*, traits::*};
 
@@ -7,15 +7,17 @@ pub struct Worker {
     master_rank: i32,
     cpu_color: TokenColor,
     player_color: TokenColor,
+    depth: usize,
 }
 
 impl Worker {
-    pub fn new(world: SystemCommunicator, master_rank: i32) -> Self {
+    pub fn new(world: SystemCommunicator, master_rank: i32, depth: usize) -> Self {
         return Self {
             world,
             master_rank,
             cpu_color: TokenColor::Red,
             player_color: TokenColor::Yellow,
+            depth,
         };
     }
 
@@ -23,24 +25,31 @@ impl Worker {
         loop {
             self.world
                 .process_at_rank(self.master_rank)
-                .send_with_tag::<u8>(&0, Tag::RequestWork as i32);
+                .send_with_tag::<u8>(&0, Tag::Request as i32);
 
-            let (assignment, status) = self
+            let (msg, status) = self
                 .world
                 .process_at_rank(self.master_rank)
                 .receive_vec::<u8>();
 
             if status.tag() == Tag::Finished as i32 {
                 break;
-            } else if status.tag() == Tag::Assignment as i32 {
-                let mut task: Task = bincode::deserialize(&assignment).unwrap();
+            }
 
-                task.node.build_tree(&mut task.board, 6, 2);
+            if status.tag() == Tag::Response as i32 {
+                let mut assignment: Assignment = bincode::deserialize(&msg).unwrap();
 
-                task.node
-                    .calculate_value(&mut task.board, self.cpu_color, self.player_color);
+                assignment
+                    .node
+                    .build_tree(&mut assignment.board, self.depth, 0);
 
-                let task_encoded: Vec<u8> = bincode::serialize(&task).unwrap();
+                assignment.node.calculate_value(
+                    &mut assignment.board,
+                    self.cpu_color,
+                    self.player_color,
+                );
+
+                let task_encoded: Vec<u8> = bincode::serialize(&assignment).unwrap();
 
                 self.world
                     .process_at_rank(self.master_rank)

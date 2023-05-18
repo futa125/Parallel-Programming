@@ -45,7 +45,7 @@ pub struct Board {
     pub rows: usize,
     pub columns: usize,
     fields: Vec<Vec<Field>>,
-    columns_full: Vec<bool>,
+    pub columns_full: Vec<bool>,
 }
 
 impl Board {
@@ -135,10 +135,11 @@ impl Board {
                     continue;
                 }
 
-                if (row > 4 && column > 4)
-                    && (self.fields[row][column] == self.fields[row - 1][column - 1])
-                    && (self.fields[row - 1][column - 1] == self.fields[row - 2][column - 2])
-                    && (self.fields[row - 2][column - 2] == self.fields[row - 3][column - 3])
+                // Rows
+                if (column <= self.columns - 4)
+                    && (self.fields[row][column] == self.fields[row][column + 1])
+                    && (self.fields[row][column + 1] == self.fields[row][column + 2])
+                    && (self.fields[row][column + 2] == self.fields[row][column + 3])
                 {
                     return match self.fields[row][column] {
                         Field::Token(color) => Some(color),
@@ -146,7 +147,8 @@ impl Board {
                     };
                 }
 
-                if (row < self.rows - 3)
+                // Columns
+                if (row <= self.rows - 4)
                     && (self.fields[row][column] == self.fields[row + 1][column])
                     && (self.fields[row + 1][column] == self.fields[row + 2][column])
                     && (self.fields[row + 2][column] == self.fields[row + 3][column])
@@ -157,10 +159,11 @@ impl Board {
                     };
                 }
 
-                if (row > self.rows - 3 && column < self.columns - 3)
-                    && (self.fields[row][column] == self.fields[row - 1][column + 1])
-                    && (self.fields[row - 1][column + 1] == self.fields[row - 2][column + 2])
-                    && (self.fields[row - 2][column + 2] == self.fields[row - 3][column + 3])
+                // Left diagonal
+                if (row >= 3 && column >= 3)
+                    && (self.fields[row][column] == self.fields[row - 1][column - 1])
+                    && (self.fields[row - 1][column - 1] == self.fields[row - 2][column - 2])
+                    && (self.fields[row - 2][column - 2] == self.fields[row - 3][column - 3])
                 {
                     return match self.fields[row][column] {
                         Field::Token(color) => Some(color),
@@ -168,10 +171,11 @@ impl Board {
                     };
                 }
 
-                if (column < self.columns - 3)
-                    && (self.fields[row][column] == self.fields[row][column + 1])
-                    && (self.fields[row][column + 1] == self.fields[row][column + 2])
-                    && (self.fields[row][column + 2] == self.fields[row][column + 3])
+                // Right diagonal
+                if (row >= 3 && column <= self.columns - 4)
+                    && (self.fields[row][column] == self.fields[row - 1][column + 1])
+                    && (self.fields[row - 1][column + 1] == self.fields[row - 2][column + 2])
+                    && (self.fields[row - 2][column + 2] == self.fields[row - 3][column + 3])
                 {
                     return match self.fields[row][column] {
                         Field::Token(color) => Some(color),
