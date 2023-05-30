@@ -1,5 +1,4 @@
 extern crate ocl;
-extern crate rand;
 
 use ocl::{flags::MEM_WRITE_ONLY, Error, ProQue};
 use std::time::Instant;
@@ -84,5 +83,5 @@ fn main() {
     };
 
     println!("Elapsed Time: {:?}", start.elapsed());
-    println!("Pi: {:}", pi);
+    println!("Pi: {pi}");
 }
