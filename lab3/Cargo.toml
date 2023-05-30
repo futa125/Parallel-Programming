@@ -1,0 +1,16 @@
+[package]
+name = "lab3"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "average-distance"
+
+[[bin]]
+name = "pi"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ocl = "0.19.0"
+rand = "0.8.5"
