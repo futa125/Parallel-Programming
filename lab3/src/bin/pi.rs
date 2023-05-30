@@ -59,7 +59,7 @@ fn calculate_pi_parallel(n: i32, m: i32, l: i32) -> Result<f64, Error> {
 
     sums_buffer.read(&mut sums).enq()?;
 
-    return Ok(sums.iter().map(|&x| x as f64).sum::<f64>());
+    return Ok(sums.iter().sum::<f64>());
 }
 
 fn main() {
