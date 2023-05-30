@@ -8,18 +8,18 @@ use ocl::{
 use rand::{rngs, Rng};
 use std::time::Instant;
 
-fn avg_distance(n: usize, m: usize) -> Result<f32, Error> {
+fn avg_distance(n: i32, m: i32) -> Result<f64, Error> {
     let src: &str = r#"
-        __kernel void avg_distance(const int n, const __global float* x, const __global float* y, __global float* distances) {
+        __kernel void avg_distance(const int n, const __global double* x, const __global double* y, __global double* distances) {
             int id = get_global_id(0);
             int size = get_global_size(0);
 
             for (int i = id; i < n; i += size) {
-                float sum = 0.0f;
+                double sum = 0.0f;
 
                 for (int j = i + 1; j < n; j++) {
-                    float dx = x[i] - x[j];
-                    float dy = y[i] - y[j];
+                    double dx = x[i] - x[j];
+                    double dy = y[i] - y[j];
 
                     sum += sqrt(dx * dx + dy * dy);
                 }
@@ -31,24 +31,24 @@ fn avg_distance(n: usize, m: usize) -> Result<f32, Error> {
 
     let mut rng: rngs::ThreadRng = rand::thread_rng();
 
-    let x: Vec<f32> = (0..n).map(|_| rng.gen_range(0.0..=1.0)).collect();
-    let y: Vec<f32> = (0..n).map(|_| rng.gen_range(0.0..=1.0)).collect();
-    let mut distances: Vec<f32> = vec![0.0; n];
+    let x: Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..=1.0)).collect();
+    let y: Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..=1.0)).collect();
+    let mut distances: Vec<f64> = vec![0.0; n as usize];
 
     let ocl_pq: ProQue = ProQue::builder().src(src).dims(n).build()?;
 
-    let x_buffer: ocl::Buffer<f32> = ocl_pq
-        .buffer_builder::<f32>()
+    let x_buffer: ocl::Buffer<f64> = ocl_pq
+        .buffer_builder::<f64>()
         .copy_host_slice(&x)
         .flags(MEM_READ_ONLY | MEM_COPY_HOST_PTR)
         .build()?;
-    let y_buffer: ocl::Buffer<f32> = ocl_pq
-        .buffer_builder::<f32>()
+    let y_buffer: ocl::Buffer<f64> = ocl_pq
+        .buffer_builder::<f64>()
         .copy_host_slice(&y)
         .flags(MEM_READ_ONLY | MEM_COPY_HOST_PTR)
         .build()?;
-    let distances_buffer: ocl::Buffer<f32> = ocl_pq
-        .buffer_builder::<f32>()
+    let distances_buffer: ocl::Buffer<f64> = ocl_pq
+        .buffer_builder::<f64>()
         .flags(MEM_WRITE_ONLY)
         .build()?;
 
@@ -67,7 +67,7 @@ fn avg_distance(n: usize, m: usize) -> Result<f32, Error> {
 
     distances_buffer.read(&mut distances).enq()?;
 
-    return Ok(distances.iter().sum::<f32>() / n as f32);
+    return Ok(distances.iter().sum::<f64>() / n as f64);
 }
 
 fn main() {
@@ -77,12 +77,12 @@ fn main() {
         std::process::exit(1);
     }
 
-    let n = args[1].parse::<usize>().unwrap();
-    let m = args[2].parse::<usize>().unwrap();
+    let n = args[1].parse::<i32>().unwrap();
+    let m = args[2].parse::<i32>().unwrap();
 
     let start = Instant::now();
 
-    let avg_dist: Result<f32, Error> = avg_distance(n, m);
+    let avg_dist: Result<f64, Error> = avg_distance(n, m);
 
     println!("Elapsed Time: {:?}", start.elapsed());
     println!("Average distance: {}", avg_dist.unwrap());

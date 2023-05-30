@@ -2,43 +2,27 @@ use std::env;
 use std::f64;
 use std::time::Instant;
 
-use ocl::{flags::MEM_WRITE_ONLY, Error, ProQue};
+use ocl::ProQue;
 
-fn boundary_psi(psi: &mut [f32], m: i32, n: i32, b: i32, h: i32, w: i32) {
+fn boundary_psi(psi: &mut [f64], m: i32, b: i32, h: i32, w: i32) {
     for i in (b + 1)..(b + w) {
-        psi[(i * (m + 2)) as usize] = (i - b) as f32;
+        psi[(i * (m + 2)) as usize] = (i - b) as f64;
     }
 
     for i in (b + w)..(m + 1) {
-        psi[(i * (m + 2)) as usize] = w as f32;
+        psi[(i * (m + 2)) as usize] = w as f64;
     }
 
     for i in 1..(h + 1) {
-        psi[((m + 1) * (m + 2) + i) as usize] = w as f32;
+        psi[((m + 1) * (m + 2) + i) as usize] = w as f64;
     }
 
     for i in (h + 1)..(h + w) {
-        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f32;
+        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f64;
     }
 }
 
-fn jacobi_step(psi: &[f64], m: usize, n: usize) -> Vec<f64> {
-    let mut psi_tmp = psi.to_vec();
-
-    for i in 1..=m {
-        for j in 1..=n {
-            psi_tmp[i * (m + 2) + j] = 0.25
-                * (psi[i * (m + 2) + j - 1]
-                    + psi[i * (m + 2) + j + 1]
-                    + psi[(i - 1) * (m + 2) + j]
-                    + psi[(i + 1) * (m + 2) + j]);
-        }
-    }
-
-    return psi_tmp;
-}
-
-fn deltasq(psi_tmp: &[f32], psi: &[f32], m: usize, n: usize) -> f32 {
+fn deltasq(psi_tmp: &[f64], psi: &[f64], m: usize, n: usize) -> f64 {
     let mut sum = 0.0;
 
     for i in 1..=m {
@@ -53,38 +37,38 @@ fn deltasq(psi_tmp: &[f32], psi: &[f32], m: usize, n: usize) -> f32 {
 
 fn main() {
     let src: &str = r#"
-    __kernel void jacobistep(__global float *psinew, __global const float *psi, int m, int n) {
+    __kernel void jacobistep(__global double *psinew, __global const double *psi, int m, int n) {
         int i = get_global_id(0) + 1;
         int j = get_global_id(1) + 1;
         if (i <= m && j <= n) {
             psinew[i*(m+2)+j] = 0.25 * (psi[(i-1)*(m+2)+j] + psi[(i+1)*(m+2)+j] + psi[i*(m+2)+j-1] + psi[i*(m+2)+j+1]);
         }
     }
-    __kernel void copy_arrays(__global const float *psinew, __global float *psi, int m, int n)
+    __kernel void copy_arrays(__global const double *psinew, __global double *psi, int m, int n)
     {
         int i = get_global_id(0) + 1;
         int j = get_global_id(1) + 1;
         psi[i*(m+2)+j]=psinew[i*(m+2)+j];
 
     }
-    __kernel void boundarypsi(__global float *psi, int m, int n, int b, int h, int w)
+    __kernel void boundarypsi(__global double *psi, int m, int n, int b, int h, int w)
     {    
         int i,j;
         for (i=b+1;i<=b+w-1;i++)
         {
-            psi[i*(m+2)+0] = (float)(i-b);
+            psi[i*(m+2)+0] = (double)(i-b);
         }
         for (i=b+w;i<=m;i++)
         {
-            psi[i*(m+2)+0] = (float)(w);
+            psi[i*(m+2)+0] = (double)(w);
         }
         for (j=1; j <= h; j++)
         {
-            psi[(m+1)*(m+2)+j] = (float) w;
+            psi[(m+1)*(m+2)+j] = (double) w;
         }
         for (j=h+1;j<=h+w-1; j++)
         {
-            psi[(m+1)*(m+2)+j]=(float)(w-j+h);
+            psi[(m+1)*(m+2)+j]=(double)(w-j+h);
         }
     }
     "#;
@@ -92,13 +76,12 @@ fn main() {
     let scale_factor: usize = args[1].parse().unwrap();
     let num_iter: usize = args[2].parse().unwrap();
     let print_freq: usize = 10;
-    let tol: f32 = 0.0;
+    let tol: f64 = 0.0;
     let bbase: usize = 10;
     let hbase: usize = 15;
     let wbase: usize = 5;
     let mbase: usize = 32;
     let nbase: usize = 32;
-    let irrotational: usize = 1;
     let mut checkerr: usize = 0;
 
     if tol > 0.0 {
@@ -122,13 +105,12 @@ fn main() {
 
     println!("Running CFD on {} x {} grid", m, n);
 
-    let mut psi: Vec<f32> = vec![0.0; (m + 2) * (n + 2)];
-    let mut psi_tmp: Vec<f32> = psi.clone();
-    boundary_psi(&mut psi, m as i32, n as i32, b as i32, h as i32, w as i32);
+    let mut psi: Vec<f64> = vec![0.0; (m + 2) * (n + 2)];
+    let mut psi_tmp: Vec<f64> = psi.clone();
+    boundary_psi(&mut psi, m as i32, b as i32, h as i32, w as i32);
 
-    let bnorm = psi.iter().map(|&x| x * x).sum::<f32>().sqrt();
+    let bnorm = psi.iter().map(|&x| x * x).sum::<f64>().sqrt();
 
-    println!("{bnorm}");
     println!("\nStarting main loop...\n");
     let t_start = Instant::now();
 
@@ -141,13 +123,13 @@ fn main() {
         .build()
         .unwrap();
 
-    let psi_buffer: ocl::Buffer<f32> = ocl_pq
-        .buffer_builder::<f32>()
+    let psi_buffer: ocl::Buffer<f64> = ocl_pq
+        .buffer_builder::<f64>()
         .copy_host_slice(&psi)
         .build()
         .unwrap();
-    let psinew_buffer: ocl::Buffer<f32> = ocl_pq
-        .buffer_builder::<f32>()
+    let psinew_buffer: ocl::Buffer<f64> = ocl_pq
+        .buffer_builder::<f64>()
         .copy_host_slice(&psi)
         .build()
         .unwrap();
@@ -156,11 +138,10 @@ fn main() {
         let kernel: ocl::Kernel = ocl_pq
             .kernel_builder("jacobistep")
             .global_work_size((m, n))
-            .local_work_size((2, 2))
             .arg_named("psinew", &psinew_buffer)
             .arg_named("psi", &psi_buffer)
-            .arg_named("m", &m)
-            .arg_named("n", &n)
+            .arg_named("m", &(m as i32))
+            .arg_named("n", &(n as i32))
             .build()
             .unwrap();
 
@@ -182,11 +163,10 @@ fn main() {
         let kernel: ocl::Kernel = ocl_pq
             .kernel_builder("copy_arrays")
             .global_work_size((m, n))
-            .local_work_size((2, 2))
             .arg_named("psinew", &psinew_buffer)
             .arg_named("psi", &psi_buffer)
-            .arg_named("m", &m)
-            .arg_named("n", &n)
+            .arg_named("m", &(m as i32))
+            .arg_named("n", &(n as i32))
             .build()
             .unwrap();
 

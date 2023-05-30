@@ -1,26 +1,26 @@
 use std::env;
-use std::f32;
+use std::f64;
 use std::time::Instant;
 
-fn boundary_psi(psi: &mut [f32], m: i32, n: i32, b: i32, h: i32, w: i32) {
+fn boundary_psi(psi: &mut [f64], m: i32, b: i32, h: i32, w: i32) {
     for i in (b + 1)..(b + w) {
-        psi[(i * (m + 2)) as usize] = (i - b) as f32;
+        psi[(i * (m + 2)) as usize] = (i - b) as f64;
     }
 
     for i in (b + w)..(m + 1) {
-        psi[(i * (m + 2)) as usize] = w as f32;
+        psi[(i * (m + 2)) as usize] = w as f64;
     }
 
     for i in 1..(h + 1) {
-        psi[((m + 1) * (m + 2) + i) as usize] = w as f32;
+        psi[((m + 1) * (m + 2) + i) as usize] = w as f64;
     }
 
     for i in (h + 1)..(h + w) {
-        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f32;
+        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f64;
     }
 }
 
-fn jacobi_step(psi: &[f32], m: usize, n: usize) -> Vec<f32> {
+fn jacobi_step(psi: &[f64], m: usize, n: usize) -> Vec<f64> {
     let mut psi_tmp = psi.to_vec();
 
     for i in 1..=m {
@@ -36,7 +36,7 @@ fn jacobi_step(psi: &[f32], m: usize, n: usize) -> Vec<f32> {
     return psi_tmp;
 }
 
-fn deltasq(psi_tmp: &[f32], psi: &[f32], m: usize, n: usize) -> f32 {
+fn deltasq(psi_tmp: &[f64], psi: &[f64], m: usize, n: usize) -> f64 {
     let mut sum = 0.0;
 
     for i in 1..=m {
@@ -54,13 +54,12 @@ fn main() {
     let scale_factor: usize = args[1].parse().unwrap();
     let num_iter: usize = args[2].parse().unwrap();
     let print_freq: usize = 10;
-    let tol: f32 = 0.0;
+    let tol: f64 = 0.0;
     let bbase: usize = 10;
     let hbase: usize = 15;
     let wbase: usize = 5;
     let mbase: usize = 32;
     let nbase: usize = 32;
-    let irrotational: usize = 1;
     let mut checkerr: usize = 0;
 
     if tol > 0.0 {
@@ -85,9 +84,9 @@ fn main() {
     println!("Running CFD on {} x {} grid", m, n);
 
     let mut psi = vec![0.0; (m + 2) * (n + 2)];
-    boundary_psi(&mut psi, m as i32, n as i32, b as i32, h as i32, w as i32);
+    boundary_psi(&mut psi, m as i32, b as i32, h as i32, w as i32);
 
-    let bnorm = psi.iter().map(|&x| x * x).sum::<f32>().sqrt();
+    let bnorm = psi.iter().map(|&x| x * x).sum::<f64>().sqrt();
 
     println!("\nStarting main loop...\n");
     let t_start = Instant::now();
