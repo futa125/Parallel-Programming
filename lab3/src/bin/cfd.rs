@@ -2,12 +2,12 @@ extern crate ocl;
 
 use ocl::ProQue;
 use std::env;
-use std::f64;
+use std::f32;
 use std::time::Instant;
 
 fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
     let src: &str = r#"
-        __kernel void jacobi(__global double *psi_tmp, __global const double *psi, int m, int n) {
+        __kernel void jacobi(__global float *psi_tmp, __global const float *psi, int m, int n) {
             int i = get_global_id(0) + 1;
             int j = get_global_id(1) + 1;
 
@@ -21,7 +21,7 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
             }
         }
 
-        __kernel void copy_arrays(__global const double *psi_tmp, __global double *psi, int m, int n)
+        __kernel void copy_arrays(__global const float *psi_tmp, __global float *psi, int m, int n)
         {
             int i = get_global_id(0) + 1;
             int j = get_global_id(1) + 1;
@@ -46,16 +46,16 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
 
     println!("Running CFD on {} x {} grid", m, n);
 
-    let mut psi: Vec<f64> = vec![0.0; ((m + 2) * (n + 2)) as usize];
-    let mut psi_tmp: Vec<f64> = psi.clone();
+    let mut psi: Vec<f32> = vec![0.0; ((m + 2) * (n + 2)) as usize];
+    let mut psi_tmp: Vec<f32> = psi.clone();
 
     boundary_psi(&mut psi, m as i32, b as i32, h as i32, w as i32);
 
-    let b_norm: f64 = psi.iter().map(|&x| x * x).sum::<f64>().sqrt();
+    let b_norm: f32 = psi.iter().map(|&x| x * x).sum::<f32>().sqrt();
 
     println!("Starting the main loop...");
 
-    let mut error: f64 = 0.0;
+    let mut error: f32 = 0.0;
     let start: Instant = Instant::now();
 
     let ocl_pq: ProQue = ProQue::builder()
@@ -64,14 +64,14 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
         .build()
         .unwrap();
 
-    let psi_buffer: ocl::Buffer<f64> = ocl_pq
-        .buffer_builder::<f64>()
+    let psi_buffer: ocl::Buffer<f32> = ocl_pq
+        .buffer_builder::<f32>()
         .copy_host_slice(&psi)
         .build()
         .unwrap();
 
-    let psi_tmp_buffer: ocl::Buffer<f64> = ocl_pq
-        .buffer_builder::<f64>()
+    let psi_tmp_buffer: ocl::Buffer<f32> = ocl_pq
+        .buffer_builder::<f32>()
         .copy_host_slice(&psi_tmp)
         .build()
         .unwrap();
@@ -79,6 +79,7 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
     for i in 1..=num_iterations {
         let kernel: ocl::Kernel = ocl_pq
             .kernel_builder("jacobi")
+            .local_work_size((16, 16))
             .global_work_size((m, n))
             .arg_named("psi_tmp", &psi_tmp_buffer)
             .arg_named("psi", &psi_buffer)
@@ -100,6 +101,7 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
 
         let kernel: ocl::Kernel = ocl_pq
             .kernel_builder("copy_arrays")
+            .local_work_size((16, 16))
             .global_work_size((m, n))
             .arg_named("psi_tmp", &psi_tmp_buffer)
             .arg_named("psi", &psi_buffer)
@@ -118,8 +120,6 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
                 start.elapsed() / i as u32
             )
         }
-
-        ocl_pq.finish().unwrap();
     }
 
     println!("Finished main loop...");
@@ -139,12 +139,12 @@ fn cfd_parallel(scale_factor: i32, num_iterations: i32) {
     );
 }
 
-fn deltasq(psi_tmp: &[f64], psi: &[f64], m: i32, n: i32) -> f64 {
-    let mut sum: f64 = 0.0;
+fn deltasq(psi_tmp: &[f32], psi: &[f32], m: i32, n: i32) -> f32 {
+    let mut sum: f32 = 0.0;
 
     for i in 1..=m {
         for j in 1..=n {
-            let diff: f64 = psi_tmp[(i * (m + 2) + j) as usize] - psi[(i * (m + 2) + j) as usize];
+            let diff: f32 = psi_tmp[(i * (m + 2) + j) as usize] - psi[(i * (m + 2) + j) as usize];
             sum += diff * diff;
         }
     }
@@ -152,7 +152,7 @@ fn deltasq(psi_tmp: &[f64], psi: &[f64], m: i32, n: i32) -> f64 {
     return sum;
 }
 
-fn copy_array(m: i32, n: i32, psi: &mut [f64], psi_tmp: &mut [f64]) {
+fn copy_array(m: i32, n: i32, psi: &mut [f32], psi_tmp: &mut [f32]) {
     for i in 1..=m {
         for j in 1..=n {
             psi[(i * (m + 2) + j) as usize] = psi_tmp[(i * (m + 2) + j) as usize];
@@ -160,8 +160,8 @@ fn copy_array(m: i32, n: i32, psi: &mut [f64], psi_tmp: &mut [f64]) {
     }
 }
 
-fn jacobi(psi: &[f64], m: i32, n: i32) -> Vec<f64> {
-    let mut psi_tmp: Vec<f64> = psi.to_vec();
+fn jacobi(psi: &[f32], m: i32, n: i32) -> Vec<f32> {
+    let mut psi_tmp: Vec<f32> = psi.to_vec();
 
     for i in 1..=m {
         for j in 1..=n {
@@ -176,21 +176,21 @@ fn jacobi(psi: &[f64], m: i32, n: i32) -> Vec<f64> {
     return psi_tmp;
 }
 
-fn boundary_psi(psi: &mut [f64], m: i32, b: i32, h: i32, w: i32) {
+fn boundary_psi(psi: &mut [f32], m: i32, b: i32, h: i32, w: i32) {
     for i in (b + 1)..(b + w) {
-        psi[(i * (m + 2)) as usize] = (i - b) as f64;
+        psi[(i * (m + 2)) as usize] = (i - b) as f32;
     }
 
     for i in (b + w)..(m + 1) {
-        psi[(i * (m + 2)) as usize] = w as f64;
+        psi[(i * (m + 2)) as usize] = w as f32;
     }
 
     for i in 1..(h + 1) {
-        psi[((m + 1) * (m + 2) + i) as usize] = w as f64;
+        psi[((m + 1) * (m + 2) + i) as usize] = w as f32;
     }
 
     for i in (h + 1)..(h + w) {
-        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f64;
+        psi[((m + 1) * (m + 2) + i) as usize] = (w - i + h) as f32;
     }
 }
 
@@ -211,19 +211,19 @@ fn cfd_sequential(scale_factor: i32, num_iterations: i32) {
 
     println!("Running CFD on {} x {} grid", m, n);
 
-    let mut psi: Vec<f64> = vec![0.0; ((m + 2) * (n + 2)) as usize];
+    let mut psi: Vec<f32> = vec![0.0; ((m + 2) * (n + 2)) as usize];
 
     boundary_psi(&mut psi, m as i32, b as i32, h as i32, w as i32);
 
-    let b_norm: f64 = psi.iter().map(|&x| x * x).sum::<f64>().sqrt();
+    let b_norm: f32 = psi.iter().map(|&x| x * x).sum::<f32>().sqrt();
 
     println!("Starting the main loop...");
 
-    let mut error: f64 = 0.0;
+    let mut error: f32 = 0.0;
     let start: Instant = Instant::now();
 
     for i in 1..=num_iterations {
-        let mut psi_tmp: Vec<f64> = jacobi(&psi, m, n);
+        let mut psi_tmp: Vec<f32> = jacobi(&psi, m, n);
 
         if i == num_iterations {
             error = deltasq(&psi_tmp, &psi, m, n).sqrt() / b_norm;
